@@ -1,0 +1,11 @@
+parameters:
+  flavor: t1.small
+  image: CentOS 7
+  key_name: RobC
+  router: InternetGW
+  external_network: internet
+  vrrp_subnet_cidr: 10.250.0.0/24
+  vrrp_subnet_dns: 8.8.8.8
+  haproxy_ports: "80,443"
+  email_address: rcoward@ukcloud.com
+  smtp_server: 127.0.0.1

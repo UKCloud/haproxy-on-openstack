@@ -1,0 +1,333 @@
+heat_template_version: 2015-10-15
+
+description: >
+   A simple Heat template that creates a VM, hooks it up to a private network
+   and associates a floating ip from an external network to the VM. It also includes
+   allowed_address_pairs integration.
+
+parameters:
+  key_name:
+    type: string
+    description: SSH Key Pair
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: Flavor to use for the haproxy server
+    default: t1.small
+    constraints:
+      - custom_constraint: nova.flavor
+  image:
+    type: string
+    description: Image ID or image name to use for the haproxy server
+    default: "CentOS 7"
+    constraints:
+      - custom_constraint: glance.image
+  router:
+    type: string
+    description: Name of the router used to connect to the external network
+    default: InternetGW
+  external_network:
+    type: string
+    description: Name of the external network used for floating ip addresses
+    default: internet
+  vrrp_subnet_cidr:
+    type: string
+    description: VRRP Subnet CIDR address
+    default: 172.16.1.0/24
+  vrrp_subnet_dns:
+    type: string
+    description: DNS Servers to configure on the vrrp subnet
+    default: 8.8.8.8
+  haproxy_ports:
+    type: comma_delimited_list
+    label: ports
+    default: "80,443"
+  email_address:
+    type: string
+    description: Email address to receive keepalived notifications
+  smtp_server:
+    type: string
+    description: IP Address of SMTP Server
+    default: 127.0.0.1
+
+resources:
+  vrrp_net:
+    type: OS::Neutron::Net
+    properties:
+      admin_state_up: true
+      name: vrrp_net
+
+  vrrp_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: vrrp_subnet
+      network: { get_resource: vrrp_net }
+      allocation_pools:
+        - start: 
+            list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '20' ]] 
+          end: 
+            list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '200' ]]
+      cidr: { get_param: vrrp_subnet_cidr }
+      dns_nameservers: [ { get_param: vrrp_subnet_dns } ]
+      gateway_ip: 
+        list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '1' ]]
+      ip_version: 4
+
+  vrrp_gw:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: { get_param: router }
+      subnet: { get_resource: vrrp_subnet }
+
+  haproxy_secgroup:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: haproxy_secgroup
+      rules:
+        - direction: ingress
+          protocol: 112
+          remote_group_id:
+          remote_mode: remote_group_id
+        - direction: ingress
+          protocol: icmp
+          remote_ip_prefix: 0.0.0.0/0
+        - direction: ingress
+          protocol: tcp
+          remote_ip_prefix: 0.0.0.0/0
+          port_range_min: 80
+          port_range_max: 80
+
+  ssh_ext_secgroup:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: ssh_ext_secgroup
+      rules:
+        - protocol: tcp
+          remote_ip_prefix: 0.0.0.0/0
+          port_range_min: 22
+          port_range_max: 22
+
+  consul_secgroup:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: consul_secgroup
+      rules:
+        - direction: ingress
+          protocol: tcp
+          remote_group_id:
+          remote_mode: remote_group_id
+          port_range_min: 8300
+          port_range_max: 8302
+        - direction: ingress
+          protocol: udp
+          remote_group_id:
+          remote_mode: remote_group_id
+          port_range_min: 8301
+          port_range_max: 8302
+        - direction: ingress
+          protocol: tcp
+          remote_group_id:
+          remote_mode: remote_group_id
+          port_range_min: 8400
+          port_range_max: 8400
+        - direction: ingress
+          protocol: tcp
+          remote_group_id:
+          remote_mode: remote_group_id
+          port_range_min: 8500
+          port_range_max: 8500
+        - direction: ingress
+          protocol: tcp
+          remote_group_id:
+          remote_mode: remote_group_id
+          port_range_min: 8600
+          port_range_max: 8600
+        - direction: ingress
+          protocol: udp
+          remote_group_id:
+          remote_mode: remote_group_id
+          port_range_min: 8600
+          port_range_max: 8600
+
+  haproxy_vip_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: vrrp_net }
+      fixed_ips:
+        - ip_address:
+            list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '201' ]]
+      security_groups:
+        - { get_resource: haproxy_secgroup }
+
+  haproxy_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+      port_id: { get_resource: haproxy_vip_port }
+    depends_on: vrrp_gw
+
+  haproxy_1_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: vrrp_net }
+      allowed_address_pairs:
+        - ip_address:
+            list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '201' ]]
+      fixed_ips:
+        - subnet_id: { get_resource: vrrp_subnet }
+      security_groups:
+        - { get_resource: haproxy_secgroup }
+        - { get_resource: ssh_ext_secgroup }
+        - { get_resource: consul_secgroup }
+
+  haproxy_2_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: vrrp_net }
+      allowed_address_pairs:
+        - ip_address:
+            list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '201' ]]
+      fixed_ips:
+        - subnet_id: { get_resource: vrrp_subnet }
+      security_groups:
+        - { get_resource: haproxy_secgroup }
+        - { get_resource: ssh_ext_secgroup }
+        - { get_resource: consul_secgroup }
+
+  haproxy_cluster:
+    type: OS::Nova::ServerGroup
+    properties:
+      name: Haproxy Cluster
+      policies: ['anti-affinity']
+
+  haproxy_1_server:
+    type: OS::Nova::Server
+    properties:
+      name: haproxy01
+      flavor: { get_param: flavor }
+      image: { get_param: image }
+      key_name: { get_param: key_name }
+      scheduler_hints: { group: { get_resource: haproxy_cluster }}
+      networks:
+        - port: { get_resource: haproxy_1_port }
+      user_data_format: RAW
+      user_data:
+        get_resource: haproxy_master_init
+
+  haproxy_2_server:
+    type: OS::Nova::Server
+    properties:
+      name: haproxy02
+      flavor: { get_param: flavor }
+      image: { get_param: image }
+      key_name: { get_param: key_name }
+      scheduler_hints: { group: { get_resource: haproxy_cluster }}
+      networks:
+        - port: { get_resource: haproxy_2_port }
+      user_data_format: RAW
+      user_data:
+        get_resource: haproxy_slave_init
+
+  haproxy_master_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: {get_resource: master_configs}
+      - config: {get_resource: install_keepalived}
+      - config: {get_resource: install_haproxy}
+      - config: {get_resource: install_consul}
+
+  haproxy_slave_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: {get_resource: slave_configs}
+      - config: {get_resource: install_keepalived}
+      - config: {get_resource: install_haproxy}
+      - config: {get_resource: install_consul}
+
+  install_keepalived:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: { get_file: 'files/install_keepalived.sh' }
+
+  install_haproxy:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: { get_file: 'files/install_haproxy.sh' }
+
+  install_consul:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: { get_file: 'files/install_consul.sh' }
+
+  master_configs:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        write_files:
+        - path: /etc/keepalived/keepalived.conf
+          content: 
+            str_replace:
+              template: { get_file: 'files/keepalived.conf' }
+              params:
+                $vip: { get_attr: [haproxy_vip_port, fixed_ips, 0, ip_address] }
+                $state: MASTER
+                $priority: 100
+                $password: SUperS3creT
+        - path: /etc/haproxy/haproxy.cfg
+          content: 
+            str_replace:
+              template: { get_file: 'files/haproxy.cfg' }
+              params:
+                $vip: { get_attr: [haproxy_vip_port, fixed_ips, 0, ip_address] }
+        - path: /etc/init.d/consul
+          content: { get_file: 'files/consul.redhat.init.sh' }
+          permissions: '0755'
+        - path: /etc/consul.conf
+          content: 
+            str_replace:
+              template: { get_file: 'files/consul.conf' }
+              params:
+                $vip: { get_attr: [haproxy_vip_port, fixed_ips, 0, ip_address] }
+                $dc: DC1
+                $encrypt_key: Hakj903oxHTa2ttKuCiHfA==
+                $local_ip: { get_attr: [haproxy_1_port, fixed_ips, 0, ip_address] }
+
+  slave_configs:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        write_files:
+        - path: /etc/keepalived/keepalived.conf
+          content: 
+            str_replace:
+              template: { get_file: 'files/keepalived.conf' }
+              params:
+                $vip: { get_attr: [haproxy_vip_port, fixed_ips, 0, ip_address] }
+                $state: BACKUP
+                $priority: 50
+                $password: SUperS3creT
+        - path: /etc/haproxy/haproxy.cfg
+          content: 
+            str_replace:
+              template: { get_file: 'files/haproxy.cfg' }
+              params:
+                $vip: { get_attr: [haproxy_vip_port, fixed_ips, 0, ip_address] }
+        - path: /etc/init.d/consul
+          content: { get_file: 'files/consul.redhat.init.sh' }
+          permissions: '0755'
+        - path: /etc/consul.conf
+          content: 
+            str_replace:
+              template: { get_file: 'files/consul.conf' }
+              params:
+                $vip: { get_attr: [haproxy_vip_port, fixed_ips, 0, ip_address] }
+                $dc: DC1
+                $encrypt_key: Hakj903oxHTa2ttKuCiHfA==
+                $local_ip: { get_attr: [haproxy_2_port, fixed_ips, 0, ip_address] }
+

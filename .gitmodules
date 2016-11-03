@@ -1,0 +1,3 @@
+[submodule "heat-templates"]
+	path = heat-templates
+	url = https://github.com/openstack/heat-templates.git
