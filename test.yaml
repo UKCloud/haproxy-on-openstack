@@ -252,7 +252,7 @@ resources:
   master_deployment:
     type: OS::Heat::SoftwareDeployment
     properties:
-      signal_transport: HEAT_SIGNAL
+      signal_transport: CFN_SIGNAL
       config:
         get_resource: keepalived_config
       server:
@@ -264,7 +264,7 @@ resources:
   slave_deployment:
     type: OS::Heat::SoftwareDeployment
     properties:
-      signal_transport: HEAT_SIGNAL
+      signal_transport: CFN_SIGNAL
       config:
         get_resource: keepalived_config
       server:
@@ -330,7 +330,7 @@ resources:
   haproxy_deployment:
     type: OS::Heat::SoftwareDeploymentGroup
     properties:
-      signal_transport: HEAT_SIGNAL
+      signal_transport: CFN_SIGNAL
       config:
         get_resource: haproxy_install
       servers:
