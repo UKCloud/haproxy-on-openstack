@@ -157,9 +157,6 @@ resources:
       name: Haproxy Cluster
       policies: ['anti-affinity']
 
-  boot_config:
-    type: Heat::InstallConfigAgent
-
   haproxy_1_server:
     type: OS::Nova::Server
     properties:
@@ -171,7 +168,7 @@ resources:
       networks:
         - port: { get_resource: haproxy_1_port }
       user_data_format: SOFTWARE_CONFIG
-      user_data: {get_attr: [boot_config, config]}
+      user_data: {get_resource: init}
 
   haproxy_2_server:
     type: OS::Nova::Server
@@ -184,23 +181,30 @@ resources:
       networks:
         - port: { get_resource: haproxy_2_port }
       user_data_format: SOFTWARE_CONFIG
-      user_data: {get_attr: [boot_config, config]}
+      user_data: {get_resource: init}
 
-#   haproxy_master_init:
-#     type: OS::Heat::MultipartMime
-#     properties:
-#       parts:
-#       - config: {get_resource: keepalived_master}
-#       - config: {get_resource: haproxy_conf}
-#       - config: {get_resource: software_install}
+  # boot_config:
+  #   type: Heat::InstallConfigAgent
 
-#   haproxy_slave_init:
-#     type: OS::Heat::MultipartMime
-#     properties:
-#       parts:
-#       - config: {get_resource: keepalived_slave}
-#       - config: {get_resource: haproxy_conf}
-#       - config: {get_resource: software_install}
+  # Install, configure and enable the Heat configuration agent
+  config_agent:
+    type: collect-config-setup/install_config_agent_centos_yum.yaml
+
+  # Collect the results from a set of resources
+  init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      # - config: {get_resource: set_hostname}
+      # - config: {get_resource: included_files}
+      # - config: {get_resource: rhn_register}
+      # - config: {get_resource: set_extra_repos}
+      # - config: {get_resource: set_extra_docker_repos}
+      # - config: {get_resource: host_update}
+      - config: {get_attr: [config_agent, config]}
+        type: multipart
+      # - config: {get_resource: bastion_boot}
+
 
   keepalived_config:
     type: OS::Heat::SoftwareConfig
@@ -243,8 +247,7 @@ resources:
             systemctl enable keepalived
             systemctl restart keepalived
           params:
-            $vip: 
-              list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '201' ]]
+            $vip: { get_attr: [haproxy_vip_port, fixed_ips, 0, ip_address] }
 
   master_deployment:
     type: OS::Heat::SoftwareDeployment
@@ -322,8 +325,7 @@ resources:
             systemctl enable haproxy
             systemctl restart haproxy
           params:
-            $vip: 
-                list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '201' ]]
+            $vip: { get_attr: [haproxy_vip_port, fixed_ips, 0, ip_address] }
 
   haproxy_deployment:
     type: OS::Heat::SoftwareDeploymentGroup
