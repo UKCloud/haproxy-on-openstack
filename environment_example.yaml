@@ -7,5 +7,4 @@ parameters:
   vrrp_subnet_cidr: 10.250.0.0/24
   vrrp_subnet_dns: 8.8.8.8
   haproxy_ports: "80,443"
-  email_address: user@example.com
-  smtp_server: 127.0.0.1
+  dmz_subnet_cidr: 10.0.0.0/24
