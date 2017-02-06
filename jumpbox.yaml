@@ -1,0 +1,112 @@
+heat_template_version: 2015-10-15
+
+description: >
+   This HEAT template creates a minimal infrastructure deployment of a single 
+   router, network and subnet. It defines a Security Group to allow inbound
+   SSH traffic and creates a Jumpbox server configured with the security group
+   and a floating IP address for external access.
+
+parameters:
+  key_name:
+    type: string
+    description: SSH Key Pair
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: Flavor to use for the haproxy server
+    default: t1.small
+    constraints:
+      - custom_constraint: nova.flavor
+  image:
+    type: string
+    description: Image ID or image name to use for the haproxy server
+    default: "CentOS 7"
+    constraints:
+      - custom_constraint: glance.image
+  external_network:
+    type: string
+    description: Name of the external network used for floating ip addresses
+    default: internet
+  dmz_subnet_cidr:
+    type: string
+    description: DMZ Subnet CIDR address
+    default: 10.0.0.0/24
+  dmz_subnet_dns:
+    type: string
+    description: DNS Servers to configure on the DMZ subnet
+    default: 8.8.8.8
+
+resources:
+  dmz_net:
+    type: OS::Neutron::Net
+    properties:
+      admin_state_up: true
+      name: dmz_net
+
+  dmz_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: dmz_subnet
+      network: { get_resource: dmz_net }
+      allocation_pools:
+        - start: 
+            list_join: ['.', [ str_split: ['.', { get_param: dmz_subnet_cidr }, 0], str_split: ['.', { get_param: dmz_subnet_cidr }, 1], str_split: ['.', { get_param: dmz_subnet_cidr }, 2], '20' ]] 
+          end: 
+            list_join: ['.', [ str_split: ['.', { get_param: dmz_subnet_cidr }, 0], str_split: ['.', { get_param: dmz_subnet_cidr }, 1], str_split: ['.', { get_param: dmz_subnet_cidr }, 2], '200' ]]
+      cidr: { get_param: dmz_subnet_cidr }
+      dns_nameservers: [ { get_param: dmz_subnet_dns } ]
+      gateway_ip: 
+        list_join: ['.', [ str_split: ['.', { get_param: dmz_subnet_cidr }, 0], str_split: ['.', { get_param: dmz_subnet_cidr }, 1], str_split: ['.', { get_param: dmz_subnet_cidr }, 2], '1' ]]
+      ip_version: 4
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info: { network: { get_param: external_network } }
+      name: InternetGW
+
+  dmz_gw:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: { get_resource: router }
+      subnet: { get_resource: dmz_subnet }
+
+  ssh_ext_secgroup:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+        - protocol: tcp
+          remote_ip_prefix: 0.0.0.0/0
+          port_range_min: 22
+          port_range_max: 22
+  
+  jumpbox_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: dmz_net }
+      fixed_ips:
+        - subnet_id: { get_resource: dmz_subnet }
+      security_groups:
+        - { get_resource: ssh_ext_secgroup }
+
+  jumpbox_server:
+    type: OS::Nova::Server
+    properties:
+      name: jump01
+      flavor: { get_param: flavor }
+      image: { get_param: image }
+      key_name: { get_param: key_name }
+      networks:
+        - port: { get_resource: jumpbox_port }
+
+  jumpbox_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+
+  jumpbox_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: jumpbox_ip }
+      port_id: { get_resource: jumpbox_port }

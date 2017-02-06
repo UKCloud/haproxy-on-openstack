@@ -1,0 +1,7 @@
+parameters:
+  flavor: t1.small
+  image: CentOS 7
+  key_name: MySSHKey
+  external_network: internet
+  dmz_subnet_cidr: 10.0.0.0/24
+  dmz_subnet_dns: 8.8.8.8
