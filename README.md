@@ -32,7 +32,7 @@ Deploy the pair of HAProxy servers by running:
 ```
 openstack stack create -t haproxy.yaml -e environment_example.yaml --wait haproxy
 ```
-To re-deploy the haproxy configuration any time after updating the files/haproxy.cfg file, you can run:
+To re-deploy the haproxy configuration any time after updating the `files/haproxy.cfg` file, you can run:
 ```
 openstack stack update -t haproxy.yaml -e environment_example.yaml --wait haproxy
 ```
