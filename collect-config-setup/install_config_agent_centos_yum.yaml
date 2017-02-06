@@ -6,20 +6,20 @@ resources:
     type: "OS::Heat::SoftwareConfig"
     properties:
       group: ungrouped
-      config: {get_file: fragments/install_config_agent_yum.sh}
+      config: {get_file: files/install_config_agent_yum.sh}
 
   configure_config_agent:
     type: "OS::Heat::SoftwareConfig"
     properties:
       group: ungrouped
       config:
-        get_file: fragments/configure_config_agent.sh
+        get_file: files/configure_config_agent.sh
 
   start_config_agent:
     type: "OS::Heat::SoftwareConfig"
     properties:
       group: ungrouped
-      config: {get_file: fragments/start_config_agent.sh}
+      config: {get_file: files/start_config_agent.sh}
 
   install_config_agent:
     type: "OS::Heat::MultipartMime"
