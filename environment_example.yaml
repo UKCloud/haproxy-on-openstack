@@ -1,7 +1,7 @@
 parameters:
   flavor: t1.small
   image: centos72 
-  key_name: mac-2
+  key_name: MySSHKey
   router: R1
   external_network: internet
   vrrp_subnet_cidr: 10.250.0.0/24
