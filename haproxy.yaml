@@ -92,14 +92,8 @@ resources:
   haproxy_secgroup:
     type: OS::Neutron::SecurityGroup
     properties:
+      name: haproxy_sec_group
       rules:
-        - direction: ingress
-          protocol: 112
-          remote_group_id:
-          remote_mode: remote_group_id
-        - direction: ingress
-          protocol: icmp
-          remote_ip_prefix: 0.0.0.0/0
         - direction: ingress
           protocol: tcp
           remote_ip_prefix: 0.0.0.0/0
@@ -109,6 +103,7 @@ resources:
   ssh_int_secgroup:
     type: OS::Neutron::SecurityGroup
     properties:
+      name: ssh_int_secgroup
       rules:
         - protocol: tcp
           remote_ip_prefix: { get_param: vrrp_subnet_cidr }
@@ -322,3 +317,8 @@ resources:
       servers:
         haproxy01: { get_resource: haproxy_1_server }
         haproxy02: { get_resource: haproxy_2_server }
+  
+outputs:
+  external_floating_ip:
+    description: "The Floating IP on which your services will be reachable"
+    value: { get_attr: [haproxy_ip, floating_ip_address] }
