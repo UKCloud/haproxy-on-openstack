@@ -159,9 +159,6 @@ resources:
     type: OS::Neutron::Port
     properties:
       network: { get_resource: vrrp_net }
-      fixed_ips:
-        - ip_address:
-            list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '201' ]]
       security_groups:
         - { get_resource: haproxy_secgroup }
 
@@ -169,16 +166,20 @@ resources:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network: { get_param: external_network }
-      port_id: { get_resource: haproxy_vip_port }
     depends_on: vrrp_gw
+
+  floatip:
+    properties:
+      floatingip_id: { get_resource: haproxy_ip }
+      port_id: { get_resource: haproxy_vip_port }
+    type: OS::Neutron::FloatingIPAssociation 
 
   haproxy_1_port:
     type: OS::Neutron::Port
     properties:
       network: { get_resource: vrrp_net }
-      allowed_address_pairs:
-        - ip_address:
-            list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '201' ]]
+      allowed_address_pairs: 
+        - ip_address: { get_attr: [ haproxy_vip_port, fixed_ips, 0, ip_address ] }
       fixed_ips:
         - subnet_id: { get_resource: vrrp_subnet }
       security_groups:
@@ -191,8 +192,7 @@ resources:
     properties:
       network: { get_resource: vrrp_net }
       allowed_address_pairs:
-        - ip_address:
-            list_join: ['.', [ str_split: ['.', { get_param: vrrp_subnet_cidr }, 0], str_split: ['.', { get_param: vrrp_subnet_cidr }, 1], str_split: ['.', { get_param: vrrp_subnet_cidr }, 2], '201' ]]
+        - ip_address: { get_attr: [ haproxy_vip_port, fixed_ips, 0, ip_address ] }
       fixed_ips:
         - subnet_id: { get_resource: vrrp_subnet }
       security_groups:
