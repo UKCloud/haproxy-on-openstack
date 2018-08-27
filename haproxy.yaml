@@ -47,10 +47,6 @@ parameters:
     type: string
     description: DNS Servers to configure on the vrrp subnet
     default: 8.8.8.8
-  dmz_subnet_cidr:
-    type: string
-    description: DMZ Subnet CIDR address
-    default: 10.0.0.0/24
   haproxy_ports:
     type: comma_delimited_list
     label: ports
