@@ -179,7 +179,12 @@ resources:
   haproxy_1_server:
     type: OS::Nova::Server
     properties:
-      name: haproxy01
+      name:
+        str_replace:
+          template: LB1%-sn%-1
+          params:
+            "LB1%" : LB
+            "sn%" : { get_param: server_name }
       flavor: { get_param: flavor }
       image: { get_param: image }
       key_name: { get_param: key_name }
@@ -192,7 +197,12 @@ resources:
   haproxy_2_server:
     type: OS::Nova::Server
     properties:
-      name: haproxy02
+      name: 
+        str_replace:
+          template: LB1%-sn%-2
+          params:
+            "LB1%" : LB
+            "sn%" : { get_param: server_name }
       flavor: { get_param: flavor }
       image: { get_param: image }
       key_name: { get_param: key_name }
