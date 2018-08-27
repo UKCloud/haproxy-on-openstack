@@ -1,4 +1,4 @@
-heat_template_version: 2015-10-15
+heat_template_version: newton
 
 description: >
    This HEAT template creates a pair of servers running keepalived in a
@@ -10,6 +10,10 @@ description: >
    and dynamic load-balancer configuration.
 
 parameters:
+  new_network:
+    type: boolean 
+    description: Create a new loadbalncing front end network or use a currently defined one
+    default: True
   key_name:
     type: string
     description: SSH Key Pair
@@ -59,13 +63,18 @@ parameters:
     type: string
     description: Password for keepalived encryption
     default: SUperS3creT
-
+  server_name:
+    type: string
+    default: haproxy
+  frontend_network_name:
+    type: string
+    default: lb_front_end
 resources:
   vrrp_net:
     type: OS::Neutron::Net
     properties:
       admin_state_up: true
-      name: vrrp_net
+      name: { get_param: frontend_network_name } 
 
   vrrp_subnet:
     type: OS::Neutron::Subnet
@@ -92,68 +101,35 @@ resources:
   haproxy_secgroup:
     type: OS::Neutron::SecurityGroup
     properties:
-      name: haproxy_sec_group
+      name:
+        str_replace:
+          template: stack_name%-haproxy-sec-group
+          params:
+            "stack_name%" : { get_param: 'OS::stack_name' }
       rules:
-        - direction: ingress
-          protocol: tcp
-          remote_ip_prefix: 0.0.0.0/0
-          port_range_min: 80
-          port_range_max: 80
+        repeat:
+          for_each:
+            <%port%>: { get_param: haproxy_ports }
+            <%protocol%>: ["tcp"]
+          template:
+            protocol: <%protocol%>
+            port_range_min: <%port%>
+            port_range_max: <%port%>
 
   ssh_int_secgroup:
     type: OS::Neutron::SecurityGroup
     properties:
-      name: ssh_int_secgroup
+      name:
+        str_replace:
+          template: stack_name%-internal-sec-group
+          params:
+            "stack_name%" : { get_param: 'OS::stack_name' }
       rules:
         - protocol: tcp
-          remote_ip_prefix: { get_param: vrrp_subnet_cidr }
-          port_range_min: 22
-          port_range_max: 22
-        - protocol: tcp
-          remote_ip_prefix: { get_param: dmz_subnet_cidr }
+          remote_ip_prefix: 0.0.0.0/0
           port_range_min: 22
           port_range_max: 22
 
-  # consul_secgroup:
-  #   type: OS::Neutron::SecurityGroup
-  #   properties:
-  #     rules:
-  #       - direction: ingress
-  #         protocol: tcp
-  #         remote_group_id:
-  #         remote_mode: remote_group_id
-  #         port_range_min: 8300
-  #         port_range_max: 8302
-  #       - direction: ingress
-  #         protocol: udp
-  #         remote_group_id:
-  #         remote_mode: remote_group_id
-  #         port_range_min: 8301
-  #         port_range_max: 8302
-  #       - direction: ingress
-  #         protocol: tcp
-  #         remote_group_id:
-  #         remote_mode: remote_group_id
-  #         port_range_min: 8400
-  #         port_range_max: 8400
-  #       - direction: ingress
-  #         protocol: tcp
-  #         remote_group_id:
-  #         remote_mode: remote_group_id
-  #         port_range_min: 8500
-  #         port_range_max: 8500
-  #       - direction: ingress
-  #         protocol: tcp
-  #         remote_group_id:
-  #         remote_mode: remote_group_id
-  #         port_range_min: 8600
-  #         port_range_max: 8600
-  #       - direction: ingress
-  #         protocol: udp
-  #         remote_group_id:
-  #         remote_mode: remote_group_id
-  #         port_range_min: 8600
-  #         port_range_max: 8600
 
   haproxy_vip_port:
     type: OS::Neutron::Port
@@ -185,7 +161,6 @@ resources:
       security_groups:
         - { get_resource: haproxy_secgroup }
         - { get_resource: ssh_int_secgroup }
-        # - { get_resource: consul_secgroup }
 
   haproxy_2_port:
     type: OS::Neutron::Port
@@ -198,7 +173,6 @@ resources:
       security_groups:
         - { get_resource: haproxy_secgroup }
         - { get_resource: ssh_int_secgroup }
-        # - { get_resource: consul_secgroup }
 
   haproxy_cluster:
     type: OS::Nova::ServerGroup
