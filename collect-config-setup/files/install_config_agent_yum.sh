@@ -1,20 +1,21 @@
 #!/bin/bash
-set -eux
+#set -eux
 
 # on Atomic host os-collect-config runs inside a container which is
 # fetched&started in another step
 [ -e /run/ostree-booted ] && exit 0
 
 if ! yum info os-collect-config; then
-    # if os-collect-config package is not available, first check if
-    # the repo is available but disabled, otherwise install the package
-    # from epel
-    if yum repolist disabled|grep rhel-7-server-openstack-9-director-rpms; then
-        subscription-manager repos --enable="rhel-7-server-openstack-9-director-rpms"
-        subscription-manager repos --enable="rhel-7-server-openstack-9-rpms"
-    else
-        yum -y install centos-release-openstack-mitaka
-    fi
+  curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+  python get-pip.py
+  yum install -y git python-devel
+  yum groupinstall -y "Development Tools"
+  #TODO workout the odd dependancies that cuase this to fail
+  yum remove -y PyYAML
+  yum remove -y python-requests
+  pip install -U git+git://git.openstack.org/openstack/os-apply-config.git
+  pip install -U git+git://git.openstack.org/openstack/os-collect-config.git
+  pip install -U git+git://git.openstack.org/openstack/os-refresh-config.git
+  yum install -y http://vault.centos.org/7.4.1708/cloud/x86_64/openstack-newton/openstack-heat-templates-0-0.5.1e6015dgit.el7.noarch.rpm
+  yum install -y cloud-init
 fi
-yum -y install os-collect-config python-zaqarclient os-refresh-config os-apply-config openstack-heat-templates python-oslo-log python-psutil
-#yum-config-manager --disable 'epel*'

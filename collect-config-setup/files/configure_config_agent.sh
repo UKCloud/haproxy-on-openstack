@@ -70,6 +70,18 @@ metadata_url = {{metadata_url}}
 EOF
 mkdir -p $oac_templates/var/run/heat-config
 
+cat <<EOF > /etc/systemd/system/os-collect-config.service
+[Unit]
+Description=Starts the os-collect-config service, used to dynamicly configure this host.
+
+[Service]
+ExecStart=/bin/os-collect-config
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
 # template for writing heat deployments data to a file
 echo "{{deployments}}" > $oac_templates/var/run/heat-config/heat-config
 

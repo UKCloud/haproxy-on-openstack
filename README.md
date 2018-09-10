@@ -43,6 +43,9 @@ The stack update will not re-deploy the instances. It uses the `os-collect-confi
 ### TODO:
  - [x] Deploy HA cluster of HAProxy instances
  - [x] Automated deployment of HAProxy configuration
+ - [X] Update to work with OpenStack Netwon
+ - [ ] Write script to allow easier enviroment file creation
+ - [ ] Make stack more configurable
  - [ ] Add OpenSSL certificate deployment and https configuration for HAProxy instances
  - [ ] Deploy Consul for service discovery and automated configuration of HAProxy
 
